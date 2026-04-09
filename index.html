@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Planday - Leave Account Adjustment App</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['Inter', 'sans-serif'],
+            },
+          },
+        },
+      }
+    </script>
+    <style>
+      /* Force the browser to render system controls (scrollbars, date pickers, etc.) in light mode */
+      :root {
+        color-scheme: light;
+      }
+      
+      /* Explicitly force white background and dark text on inputs to prevent dark mode inheritance */
+      input:not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="file"]), select, textarea {
+        background-color: #ffffff;
+        color: #1f2937; /* text-gray-800 */
+      }
+      
+      /* Ensure disabled inputs look visually disabled */
+      input:disabled, select:disabled, textarea:disabled {
+        background-color: #f3f4f6; /* gray-100 */
+        color: #6b7280; /* gray-500 */
+        cursor: not-allowed;
+      }
+
+      /* Specific fix for checkboxes and radios to ensure they are visible and use the theme color */
+      input[type="checkbox"], input[type="radio"] {
+        background-color: #ffffff;
+        accent-color: #2563eb; /* blue-600 */
+      }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.min.js"></script>
+  <script type="importmap">
+{
+  "imports": {
+    "react": "https://aistudiocdn.com/react@^19.2.1",
+    "react/": "https://aistudiocdn.com/react@^19.2.1/",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.1/"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+  <body class="bg-gray-100 text-gray-800">
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>

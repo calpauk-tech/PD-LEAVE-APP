@@ -1,0 +1,5 @@
+{
+  "name": "Github: Planday Bulk Leave Adjustments V1.5",
+  "description": "A tool to retrieve employee leave account balances for specific dates and post adjustments (add or deduct leave) directly via the Planday Open API.",
+  "requestFramePermissions": []
+}

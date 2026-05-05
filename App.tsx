@@ -40,31 +40,47 @@ const parseDateToIso = (input: any, formatPreference: 'EU' | 'US'): string | nul
     // 1. Handle JS Date Objects (from Excel Cell Date types)
     if (input instanceof Date) {
          if (isNaN(input.getTime())) return null;
-         // Use local methods to get the absolute numbers the user sees in Excel
-         // (Excel creates local dates for cell values)
+         // Always use local methods!
          const y = input.getFullYear();
          const m = String(input.getMonth() + 1).padStart(2, '0');
          const d = String(input.getDate()).padStart(2, '0');
          return `${y}-${m}-${d}`;
     }
 
+    // 2. Catch raw serial numbers (General formatting)
+    if (typeof input === 'number' || /^\d{5}$/.test(String(input))) {
+         const serial = parseInt(input, 10);
+         if (serial > 20000 && serial < 80000) { // Valid bounds for recent dates
+             // 25569 is the difference in days between Jan 1 1900 and Jan 1 1970
+             const dateObj = new Date(Math.round((serial - 25569) * 86400 * 1000));
+             
+             // Use UTC methods here because we calculated pure absolute time from the Unix Epoch
+             const y = dateObj.getUTCFullYear();
+             const m = String(dateObj.getUTCMonth() + 1).padStart(2, '0');
+             const d = String(dateObj.getUTCDate()).padStart(2, '0');
+             
+             return `${y}-${m}-${d}`;
+         }
+    }
+
     const str = String(input).trim();
     if (!str) return null;
 
-    // 2. Check for ISO format (YYYY-MM-DD) - Always prioritized
+    // 3. Fallback string parsing for Text-formatted cells
+    // Check for ISO format (YYYY-MM-DD) - Always prioritized
     if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
         // Simple validation
         const d = new Date(str);
         if (!isNaN(d.getTime())) return str;
     }
 
-    // 3. Parse Text Formats (e.g., 1/4/25, 01-04-2025)
+    // 4. Parse Text Formats (e.g., 1/4/25, 01-04-2025)
     // Regex: (1 or 2 digits) [separator] (1 or 2 digits) [separator] (2 or 4 digits)
-    const match = str.match(/^(\d{1,2})[\/\.\-](\d{1,2})[\/\.\-](\d{2,4})$/);
+    const match = str.match(/(^|\b)(\d{1,2})[\/\.\-](\d{1,2})[\/\.\-](\d{2}|\d{4})\b/);
     if (match) {
-        let p1 = parseInt(match[1], 10);
-        let p2 = parseInt(match[2], 10);
-        let year = parseInt(match[3], 10);
+        let p1 = parseInt(match[2], 10);
+        let p2 = parseInt(match[3], 10);
+        let year = parseInt(match[4], 10);
 
         // Handle 2-digit years (Assume 2000s)
         if (year < 100) year += 2000;
@@ -117,17 +133,20 @@ const detectColumnFormat = (rows: any[], columnKey: string, fallbackFormat: 'EU'
     
     rows.forEach((row, index) => {
         const val = row[columnKey];
-        if (!val || val instanceof Date) return;
+        if (val === undefined || val === null || val === '') return;
+        if (val instanceof Date) return; // Unambiguous Date obj
+        if (typeof val === 'number' || /^\d{5}$/.test(String(val))) return; // Unambiguous Serial
+
         const str = String(val).trim();
         
         // Skip ISO
         if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return;
 
-        const match = str.match(/^(\d{1,2})[\/\.\-](\d{1,2})[\/\.\-](\d{2,4})$/);
+        const match = str.match(/(^|\b)(\d{1,2})[\/\.\-](\d{1,2})[\/\.\-](\d{2}|\d{4})\b/);
         if (match) {
-            const p1 = parseInt(match[1], 10);
-            const p2 = parseInt(match[2], 10);
-            const year = parseInt(match[3], 10);
+            const p1 = parseInt(match[2], 10);
+            const p2 = parseInt(match[3], 10);
+            const year = parseInt(match[4], 10);
             
             // Invalid checks
             if (p1 > 31 && p2 > 31) return; // garbage
@@ -1027,8 +1046,8 @@ const App: React.FC = () => {
                 const workbook = XLSX.read(data, { type: 'array', cellDates: true });
                 const worksheet = workbook.Sheets[workbook.SheetNames[0]];
                 
-                // Read JSON first to detect format
-                const json: any[] = XLSX.utils.sheet_to_json(worksheet, { raw: false, dateNF: 'yyyy-mm-dd' });
+                // Read JSON first to detect format. Use raw: true for dates.
+                const json: any[] = XLSX.utils.sheet_to_json(worksheet, { raw: true });
                 
                 // PHASE 1: Detect Format Per Column
                 // Now uses row-aware detection to catch conflicts

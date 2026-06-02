@@ -9,6 +9,29 @@ export interface Employee {
   firstName: string;
   lastName:string;
   salaryIdentifier: string | null;
+  departments?: number[] | any[];
+  departmentId?: number;
+  primaryDepartmentId?: number;
+  employeeGroups?: number[] | any[];
+  employeeGroupId?: number;
+  employeeGroupIds?: number[];
+  employeeType?: number | any;
+  employeeTypeId?: number;
+}
+
+export interface Department {
+  id: number | string;
+  name: string;
+}
+
+export interface EmployeeGroup {
+  id: number | string;
+  name: string;
+}
+
+export interface EmployeeType {
+  id: number | string;
+  name: string;
 }
 
 export interface LeaveAccount {
@@ -36,6 +59,13 @@ export interface AccountType {
     id: number;
     name: string;
     unit: string;
+    absenceType?: string;
+    accruingRate?: {
+        value: number;
+        unit: {
+            type: string;
+        };
+    };
 }
 
 export interface TemplateDataRow {
@@ -44,6 +74,7 @@ export interface TemplateDataRow {
     employeeName: string;
     accountId: number;
     accountName: string;
+    accountTypeCategory: 'FLEX/TOIL' | 'Fixed' | 'Accrued' | 'Unknown';
     validFrom: string;
     validTo: string;
     balanceDate: string;
@@ -54,10 +85,14 @@ export interface TemplateDataRow {
 export interface AdjustmentReview {
     id: string;
     accountId: number;
+    employeeId?: number;
     employeeName: string;
+    salaryIdentifier?: string | null;
     accountName: string;
-    availableBalance: number;
-    newBalance: number;
+    accountTypeCategory?: 'FLEX/TOIL' | 'Fixed' | 'Accrued' | 'Unknown';
+    balanceDate?: string;
+    availableBalance: number | string;
+    newBalance: number | string;
     adjustment: number;
     unit?: string;
     timestamp?: string;
@@ -65,7 +100,8 @@ export interface AdjustmentReview {
     validFrom?: string | null; // Constraint from file
     validTo?: string | null;   // Constraint from file
     comment: string;
-    status?: 'pending' | 'success' | 'error';
+    status?: 'pending' | 'success' | 'error' | 'skipped';
     error?: string;
     isValidationError?: boolean; // Flag to distinguish pre-check errors from API errors
+    postAdjustmentBalance?: number;
 }

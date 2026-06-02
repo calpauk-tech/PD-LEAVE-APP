@@ -1,0 +1,33 @@
+@import "@fontsource/inter/400.css";
+@import "@fontsource/inter/500.css";
+@import "@fontsource/inter/600.css";
+@import "@fontsource/inter/700.css";
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+}
+
+/* Force the browser to render system controls (scrollbars, date pickers, etc.) in light mode */
+:root {
+  color-scheme: light;
+}
+
+/* Explicitly force white background and dark text on inputs to prevent dark mode inheritance */
+input:not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="file"]), select, textarea {
+  background-color: #ffffff;
+  color: #1f2937; /* text-gray-800 */
+}
+
+/* Ensure disabled inputs look visually disabled */
+input:disabled, select:disabled, textarea:disabled {
+  background-color: #f3f4f6; /* gray-100 */
+  color: #6b7280; /* gray-500 */
+  cursor: not-allowed;
+}
+
+/* Specific fix for checkboxes and radios to ensure they are visible and use the theme color */
+input[type="checkbox"], input[type="radio"] {
+  background-color: #ffffff;
+  accent-color: #2563eb; /* blue-600 */
+}

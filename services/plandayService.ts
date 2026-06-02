@@ -156,8 +156,57 @@ async function fetchPaginatedData(endpoint: string): Promise<any[]> {
     return allData;
 }
 
+export async function fetchPortalInfo(): Promise<{ name: string }> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/portal/v1.0/info`);
+    if (!response.ok) {
+        console.warn(`Failed to fetch portal info: ${response.status}`);
+        return { name: 'Unknown' };
+    }
+    const result = await response.json();
+    return { name: result.data?.name || 'Unknown' };
+}
+
 export async function fetchEmployees(): Promise<Employee[]> {
     return fetchPaginatedData('/hr/v1.0/employees');
+}
+
+export async function fetchDepartments(): Promise<{id: number, name: string}[]> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/hr/v1.0/departments`);
+    if (response.status === 403) {
+        throw new Error("Missing HR Departments Scope (hr.departments.read). Please add this scope to your Planday App credentials.");
+    }
+    if (!response.ok) {
+        console.warn(`Failed to fetch departments: ${response.status}`);
+        return [];
+    }
+    const result = await response.json();
+    return result.data || [];
+}
+
+export async function fetchEmployeeGroups(): Promise<{id: number, name: string}[]> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/hr/v1.0/employeegroups`);
+    if (response.status === 403) {
+        throw new Error("Missing HR Employee Groups Scope (hr.employeegroups.read). Please add this scope to your Planday App credentials.");
+    }
+    if (!response.ok) {
+        console.warn(`Failed to fetch employee groups: ${response.status}`);
+        return [];
+    }
+    const result = await response.json();
+    return result.data || [];
+}
+
+export async function fetchEmployeeTypes(): Promise<{id: number, name: string}[]> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/hr/v1.0/employeetypes`);
+    if (response.status === 403) {
+        throw new Error("Missing HR Employee Types Scope (hr.employeetypes.read). Please add this scope to your Planday App credentials.");
+    }
+    if (!response.ok) {
+        console.warn(`Failed to fetch employee types: ${response.status}`);
+        return [];
+    }
+    const result = await response.json();
+    return result.data || [];
 }
 
 export async function fetchAccountTypes(): Promise<AccountType[]> {
@@ -222,4 +271,40 @@ export async function postBalanceAdjustment(accountId: number, payload: BalanceA
         return { success: true };
     }
     return result.json();
+}
+
+export async function postFlexBalanceAdjustment(accountId: number, payload: BalanceAdjustmentPayload): Promise<any> {
+    const transactionPayload = {
+        externalId: `bulk-adj-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
+        type: "Adjustment",
+        date: payload.effectiveDate,
+        amounts: [
+            {
+                value: payload.value,
+                unit: {
+                    type: "Hours"
+                }
+            }
+        ],
+        note: payload.comment || "API BULK UPDATE"
+    };
+
+    const result = await fetchWithAuth(`${API_BASE_URL}/absence/v1.0/accounts/${accountId}/transactions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(transactionPayload),
+    });
+
+    if (!result.ok) {
+        const errorText = await result.text();
+        throw new Error(`Failed to post FLEX adjustment: ${errorText}`);
+    }
+    if (result.status === 201 || result.status === 200 || result.status === 204) {
+        return { success: true };
+    }
+    try {
+        return await result.json();
+    } catch {
+        return { success: true };
+    }
 }

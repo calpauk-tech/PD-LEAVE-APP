@@ -6,7 +6,7 @@ No installation needed. The app runs directly in your browser as a single HTML f
 
 Step 1: Go to the page https://github.com/calpauk-tech/PD-LEAVE-APP/blob/main/Planday_Bulk_Leave-adjustments_v2.1.html
 
-Step 2: Click the "Download raw file" button (the download icon in the top-right of the file preview)
+Step 2: Click the the three dots in the top right and then select "Download"
 
 Step 3: Save the file anywhere on your computer
 

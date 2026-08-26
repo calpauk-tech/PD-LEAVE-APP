@@ -8,6 +8,10 @@
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
 }
 
+html {
+  font-size: 13px; /* Scales Tailwind's rem base to ~81% */
+}
+
 /* Force the browser to render system controls (scrollbars, date pickers, etc.) in light mode */
 :root {
   color-scheme: light;

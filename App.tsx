@@ -597,6 +597,48 @@ const MultiSelectDropdown: React.FC<MultiSelectDropdownProps> = ({
     );
 };
 
+const VersionChecker = () => {
+    const [updateAvailable, setUpdateAvailable] = useState(false);
+
+    useEffect(() => {
+        const checkVersion = async () => {
+            try {
+                // Add timestamp to prevent caching
+                const res = await fetch('/version.json?t=' + Date.now());
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.version && typeof __APP_VERSION__ !== 'undefined' && data.version !== __APP_VERSION__) {
+                        setUpdateAvailable(true);
+                    }
+                }
+            } catch (e) {
+                console.error('Failed to check version', e);
+            }
+        };
+
+        // Check immediately
+        checkVersion();
+        
+        // Check every 5 minutes
+        const interval = setInterval(checkVersion, 5 * 60 * 1000);
+        return () => clearInterval(interval);
+    }, []);
+
+    if (!updateAvailable) return null;
+
+    return (
+        <div className="fixed top-0 left-0 w-full bg-blue-600 text-white text-center py-2 px-4 shadow-md z-[100] flex justify-center items-center gap-4">
+            <span className="text-sm font-medium">A new version of this tool is available. Please finish your current task, then click here to update.</span>
+            <button 
+                onClick={() => window.location.reload(true)} 
+                className="bg-white text-blue-600 px-3 py-1 rounded-md text-sm font-bold hover:bg-gray-100 transition-colors shadow-sm"
+            >
+                Update Now
+            </button>
+        </div>
+    );
+};
+
 const App: React.FC = () => {
     const [currentStep, setCurrentStep] = useState<AppStep>('auth');
     const [updateMethod, setUpdateMethod] = useState<UpdateMethod>('excel');
@@ -668,6 +710,7 @@ const App: React.FC = () => {
     const [detectedColumnFormats, setDetectedColumnFormats] = useState<{effective: ColumnDetectionResult, validFrom: ColumnDetectionResult, validTo: ColumnDetectionResult} | null>(null);
     const [uploadConflicts, setUploadConflicts] = useState<{column: string, details: string[]}[] | null>(null);
     const [uploadValidityErrors, setUploadValidityErrors] = useState<{row: number, details: string[]}[] | null>(null);
+    const [uploadBalanceDateWarnings, setUploadBalanceDateWarnings] = useState<{employeeName: string, accountName: string, date: string, commonDate: string}[] | null>(null);
     const [dateReportExample, setDateReportExample] = useState<DateReportExample | null>(null);
     const [isDragging, setIsDragging] = useState(false);
     // Store uploaded file to allow re-processing with different settings
@@ -1568,21 +1611,30 @@ const App: React.FC = () => {
 
                 const detectedBalanceDate = detectColumnFormat(json, 'Balance Date', detectionFormat);
                 
-                // Track unique Balance Dates
-                const rawBalanceDateValues = new Set<string>();
+                // Track unique Balance Dates to find most common and outliers
+                const balanceDateCounts = new Map<string, number>();
                 json.forEach(row => {
                     const bd = row['Balance Date'];
                     if (bd !== undefined && bd !== null && String(bd).trim() !== '' && String(bd).trim().toUpperCase() !== 'N/A') {
                         const parsedBd = parseDateToIso(bd, detectedBalanceDate.format);
-                        if (parsedBd) rawBalanceDateValues.add(parsedBd);
+                        if (parsedBd) {
+                            balanceDateCounts.set(parsedBd, (balanceDateCounts.get(parsedBd) || 0) + 1);
+                        }
                     }
                 });
 
-                if (rawBalanceDateValues.size > 1) {
-                    setIsLoading(prev => ({ ...prev, pagedData: false }));
-                    setError("Multiple different 'Balance Date' values detected in the uploaded file. Only a single date chosen for all accounts can be uploaded in the same file. Please align them to a single Date before uploading.");
-                    return;
+                let mostCommonDate = '';
+                if (balanceDateCounts.size > 0) {
+                    let maxCount = 0;
+                    balanceDateCounts.forEach((count, date) => {
+                        if (count > maxCount) {
+                            maxCount = count;
+                            mostCommonDate = date;
+                        }
+                    });
                 }
+                
+                const balanceDateWarnings: {employeeName: string, accountName: string, date: string, commonDate: string}[] = [];
 
                 // Check for Missing OR Invalid Dates
                 const validationErrors: {row: number, details: string[]}[] = [];
@@ -1688,9 +1740,19 @@ const App: React.FC = () => {
                     let unit = row['Unit Type (Days or Hours)'];
                     
                     let balanceDate = undefined;
+                    let isMinorityBalanceDate = false;
                     const rawBalanceDate = row['Balance Date'];
                     if (rawBalanceDate !== undefined && rawBalanceDate !== null && String(rawBalanceDate).trim() !== '' && String(rawBalanceDate).trim().toUpperCase() !== 'N/A') {
                         balanceDate = parseDateToIso(rawBalanceDate, detectedBalanceDate.format);
+                        if (balanceDate && mostCommonDate && balanceDate !== mostCommonDate) {
+                            isMinorityBalanceDate = true;
+                            balanceDateWarnings.push({
+                                employeeName: employeeName || 'Unknown',
+                                accountName: accountName || 'Unknown',
+                                date: formatDateForDisplay(balanceDate, detectionFormat) || balanceDate,
+                                commonDate: formatDateForDisplay(mostCommonDate, detectionFormat) || mostCommonDate
+                            });
+                        }
                     }
 
                     let newBalance = row['New Balance'];
@@ -1759,6 +1821,7 @@ const App: React.FC = () => {
                         accountName: accountName || 'Unknown',
                         accountTypeCategory: (row['Account Type'] as 'FLEX/TOIL' | 'Fixed' | 'Accrued' | 'Unknown') || 'Unknown',
                         balanceDate: balanceDate,
+                        isMinorityBalanceDate: isMinorityBalanceDate,
                         availableBalance: availableBalance, 
                         newBalance: newBalance, 
                         adjustment: adjustment,
@@ -1779,6 +1842,11 @@ const App: React.FC = () => {
                 if (reviews.length === 0) {
                     setError("No valid adjustments found. Ensure 'Adjustment' column is filled. If you refreshed the page, please download the template again to ensure it contains Account IDs.");
                 } else {
+                    if (balanceDateWarnings.length > 0) {
+                        setUploadBalanceDateWarnings(balanceDateWarnings);
+                    } else {
+                        setUploadBalanceDateWarnings(null);
+                    }
                     clearAdjustmentsHistory(reviews);
                     resetReviewSessionState(reviews);
                     setHasAttemptedSubmit(false);
@@ -2528,6 +2596,7 @@ const App: React.FC = () => {
 
     return (
         <div className="min-h-screen font-sans flex flex-col">
+            <VersionChecker />
             <div className="container mx-auto px-8 py-8 flex-grow">
                 <PageHeader />
                 <div className="my-12 max-w-[1280px] mx-auto">
@@ -3051,6 +3120,41 @@ const App: React.FC = () => {
                              </div>
                          )}
 
+                         {/* Balance Date Warning Alert */}
+                         {uploadBalanceDateWarnings && uploadBalanceDateWarnings.length > 0 && (
+                             <div className="mb-6 bg-amber-50 border border-amber-200 p-4 rounded-md relative shadow-sm">
+                                <button 
+                                    onClick={() => setUploadBalanceDateWarnings(null)}
+                                    className="absolute top-3 right-3 text-amber-500 hover:text-amber-700"
+                                    title="Dismiss"
+                                >
+                                    <span className="text-xl leading-none font-bold">&times;</span>
+                                </button>
+                                <div className="flex">
+                                    <div className="flex-shrink-0">
+                                        <ExclamationIcon className="h-5 w-5 text-amber-500" />
+                                    </div>
+                                    <div className="ml-3 w-full pr-6">
+                                        <p className="text-sm text-amber-800 font-bold">
+                                            Multiple Balance Dates Detected
+                                        </p>
+                                        <p className="text-sm text-amber-700 mt-1">
+                                            The most common Balance Date is <strong>{uploadBalanceDateWarnings[0].commonDate}</strong>. The following accounts have different dates and are highlighted in the table below.
+                                        </p>
+                                        <div className="mt-3 text-sm max-h-40 overflow-y-auto bg-white/50 border border-amber-100 rounded p-2">
+                                            <ul className="list-disc ml-5 text-amber-800 space-y-1 font-medium">
+                                                {uploadBalanceDateWarnings.map((w, i) => (
+                                                    <li key={i}>
+                                                        {w.employeeName} - {w.accountName}: <span className="font-mono text-xs">{w.date}</span>
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                             </div>
+                         )}
+
                          {/* Filters and Bulk Actions */}
                          <div className="mb-6 space-y-6">
                             {/* Table Filters */}
@@ -3524,6 +3628,11 @@ const App: React.FC = () => {
                                                     <div className="font-mono font-medium text-gray-800">
                                                         {typeof adj.availableBalance === 'number' ? adj.availableBalance.toFixed(2) : adj.availableBalance}
                                                     </div>
+                                                    {adj.isMinorityBalanceDate && (
+                                                        <div className="text-[10px] text-amber-600 font-bold mt-1" title="This account has a different Balance Date than the majority">
+                                                            ⚠️ {adj.balanceDate ? formatDateForDisplay(adj.balanceDate, downloadDateFormat) : 'Unknown'}
+                                                        </div>
+                                                    )}
                                                 </td>
                                                 <td className="px-4 py-3 align-middle">
                                                     <div className="flex justify-start items-center w-full h-full">
@@ -3756,7 +3865,7 @@ const App: React.FC = () => {
                         <p className="mb-3">
                             Your Excel files and employee data are processed locally in your browser and are never sent to any third‑party servers; they are only transmitted directly to the official <a href="https://openapi.planday.com/" target="_blank" rel="noopener noreferrer" className="text-blue-300 hover:text-blue-200 underline">Planday Open API</a> over a secure encrypted connection (HTTPS).
                         </p>
-                        <p className="text-gray-400 border-t border-gray-700 pt-2 mt-2">Version 2.1</p>
+                        <p className="text-gray-400 border-t border-gray-700 pt-2 mt-2">Version 2.2</p>
                         <p className="text-gray-400">Made with ❤️ by the Planday Community</p>
                         <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
                     </div>
@@ -4033,11 +4142,17 @@ const CredentialsForm: React.FC<{ onSave: (credentials: PlandayApiCredentials) =
         <p className="text-gray-500 mb-6">Enter your Planday refresh token to connect with the App.</p>
         <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="refreshToken">Refresh Token</label>
-                <input id="refreshToken" type="password" value={refreshToken} onChange={(e) => setRefreshToken(e.target.value)} className="w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Enter Refresh Token"/>
+                <label className="block text-sm font-bold text-gray-800 mb-2" htmlFor="refreshToken">Refresh Token</label>
+                <input id="refreshToken" type="password" value={refreshToken} onChange={(e) => setRefreshToken(e.target.value)} className="w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Enter your token here..."/>
             </div>
             {error && <p className="text-red-500 text-sm">{error}</p>}
-            <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-md focus:outline-none focus:shadow-outline transition duration-300">Connect to Planday</button>
+            <button 
+                type="submit" 
+                disabled={!refreshToken}
+                className="w-full bg-[#8cacff] hover:bg-[#7b9bee] disabled:bg-[#8cacff] disabled:opacity-80 disabled:cursor-not-allowed text-white font-bold py-2.5 px-4 rounded-md focus:outline-none focus:shadow-outline transition duration-300"
+            >
+                Connect
+            </button>
         </form>
     </div>
   );

@@ -91,6 +91,7 @@ export interface AdjustmentReview {
     accountName: string;
     accountTypeCategory?: 'FLEX/TOIL' | 'Fixed' | 'Accrued' | 'Unknown';
     balanceDate?: string;
+    isMinorityBalanceDate?: boolean;
     availableBalance: number | string;
     newBalance: number | string;
     adjustment: number;
@@ -104,4 +105,4 @@ export interface AdjustmentReview {
     error?: string;
     isValidationError?: boolean; // Flag to distinguish pre-check errors from API errors
     postAdjustmentBalance?: number;
-}
+}declare const __APP_VERSION__: string;
